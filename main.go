@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net"
 
@@ -14,6 +15,32 @@ type Carving struct {
 	Match     string `ini:"Match"`
 	EntryPort int    `ini:"Port"`
 	ExitPort  int    `ini:"Destination"`
+}
+
+func proxyConnection(server, client net.Conn) {
+	serverClosed := make(chan int, 1)
+	clientClosed := make(chan int, 1)
+
+	go agent(server, client, clientClosed)
+	go agent(client, server, serverClosed)
+
+	var waitFor chan int
+	select {
+	case <-clientClosed:
+		server.Close()
+		waitFor = serverClosed
+	case <-serverClosed:
+		client.Close()
+		waitFor = clientClosed
+	}
+
+	<-waitFor
+}
+
+func agent(dest, src net.Conn, closed chan int) {
+	io.Copy(dest, src)
+	src.Close()
+	closed <- 1
 }
 
 func proxy(port int, carvings []*Carving) {
@@ -29,10 +56,10 @@ func proxy(port int, carvings []*Carving) {
 			log.Printf("could not open connection to destination, %d -> %d, %s\n", 3000, 23, "game")
 			server.Close()
 			client.Close()
+			continue
 		}
 
-		server.Close()
-		client.Close()
+		go proxyConnection(server, client)
 	}
 }
 
