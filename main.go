@@ -23,8 +23,16 @@ func proxy(port int, carvings []*Carving) {
 	}
 
 	for {
-		conn, _ := ln.Accept()
-		conn.Close()
+		client, _ := ln.Accept()
+		server, err := net.Dial("tcp", "localhost:23")
+		if err != nil {
+			log.Printf("could not open connection to destination, %d -> %d, %s\n", 3000, 23, "game")
+			server.Close()
+			client.Close()
+		}
+
+		server.Close()
+		client.Close()
 	}
 }
 
