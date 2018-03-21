@@ -1,3 +1,3 @@
 Runestone
 ===
-My personal magical gateway.
+My personal magical HTTP gateway.
