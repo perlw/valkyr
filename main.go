@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
@@ -62,7 +63,6 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("└done in %.2fms", float64(time.Since(start))/float64(time.Millisecond))
 	}()
 
-	//host := strings.Split(r.Host, ":")[0]
 	pathParts := []string{"/"}
 	if r.URL.Path != "/" {
 		pathParts = strings.Split(r.URL.Path, "/")
