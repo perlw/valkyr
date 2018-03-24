@@ -95,7 +95,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if longest > -1 {
 		path := "/" + strings.Join(strings.Split(r.URL.Path, "/")[longest+1:], "/")
 		r.URL.Path = path
-		remoteUrl, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d%s", matched.Destination, path))
+		remoteUrl, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d/", matched.Destination))
 		if err != nil {
 			log.Println(errors.Wrap(err, "├could not parse target url"))
 			return
