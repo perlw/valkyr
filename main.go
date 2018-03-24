@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
@@ -63,22 +62,48 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("└done in %.2fms", float64(time.Since(start))/float64(time.Millisecond))
 	}()
 
-	host := strings.Split(r.Host, ":")[0]
+	//host := strings.Split(r.Host, ":")[0]
+	pathParts := []string{"/"}
+	if r.URL.Path != "/" {
+		pathParts = strings.Split(r.URL.Path, "/")
+		pathParts[0] = "/"
+	}
 
+	longest := -1
+	var matched Rule
 	for _, rule := range h.Rules {
-		if rule.Match == host {
-			remoteUrl, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", rule.Destination))
-			if err != nil {
-				log.Println(errors.Wrap(err, "├could not parse target url"))
-				return
+		ruleHost := strings.Split(rule.Match, "/")
+		if len(ruleHost) == 0 {
+			ruleHost = []string{"/"}
+		} else {
+			ruleHost[0] = "/"
+		}
+		if len(ruleHost) <= len(pathParts) {
+			for t := range ruleHost {
+				if ruleHost[t] != pathParts[t] {
+					break
+				} else {
+					if t > longest {
+						longest = t
+						matched = rule
+					}
+				}
 			}
+		}
+	}
 
-			log.Printf("├proxying to %s[%s]", rule.Name, remoteUrl)
-			proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
-			proxy.Transport = &ProxyTransport{http.DefaultTransport}
-			proxy.ServeHTTP(w, r)
+	if longest > -1 {
+		path := "/" + strings.Join(strings.Split(r.URL.Path, "/")[longest+1:], "/")
+		remoteUrl, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d%s", matched.Destination, path))
+		if err != nil {
+			log.Println(errors.Wrap(err, "├could not parse target url"))
 			return
 		}
+
+		log.Printf("├proxying to %s[%s]", matched.Name, remoteUrl)
+		proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
+		proxy.Transport = &ProxyTransport{http.DefaultTransport}
+		proxy.ServeHTTP(w, r)
 	}
 
 	http.Error(w, "404 not found", http.StatusNotFound)
