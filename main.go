@@ -1,7 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -17,6 +19,37 @@ type Rule struct {
 	Name        string
 	Match       string `ini:"match"`
 	Destination int    `ini:"destination"`
+}
+
+type ProxyTransport struct {
+	http.RoundTripper
+}
+
+func (t *ProxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := t.RoundTripper.RoundTrip(r)
+	if err != nil {
+		log.Printf("├%s", errors.Wrap(err, "error when talking to service"))
+		resp = &http.Response{
+			Status:           "500 INTERNAL SERVER ERROR",
+			StatusCode:       500,
+			Proto:            r.Proto,
+			ProtoMajor:       r.ProtoMajor,
+			ProtoMinor:       r.ProtoMinor,
+			Header:           http.Header{},
+			Body:             ioutil.NopCloser(bytes.NewBuffer([]byte("cow says moooo"))),
+			ContentLength:    0,
+			TransferEncoding: r.TransferEncoding,
+			Close:            true,
+			Uncompressed:     false,
+			Trailer:          http.Header{},
+			Request:          nil,
+			TLS:              r.TLS,
+		}
+	}
+
+	log.Printf("├%s", resp.Status)
+
+	return resp, nil
 }
 
 type ProxyHandler struct {
@@ -42,6 +75,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 			log.Printf("├proxying to %s", remoteUrl)
 			proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
+			proxy.Transport = &ProxyTransport{http.DefaultTransport}
 			proxy.ServeHTTP(w, r)
 			return
 		}
