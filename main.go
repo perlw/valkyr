@@ -104,6 +104,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
 		proxy.Transport = &ProxyTransport{http.DefaultTransport}
 		proxy.ServeHTTP(w, r)
+		return
 	}
 
 	http.Error(w, "404 not found", http.StatusNotFound)
