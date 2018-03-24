@@ -73,7 +73,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			log.Printf("├proxying to %s", remoteUrl)
+			log.Printf("├proxying to %s[%s]", rule.Name, remoteUrl)
 			proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
 			proxy.Transport = &ProxyTransport{http.DefaultTransport}
 			proxy.ServeHTTP(w, r)
