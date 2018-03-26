@@ -101,6 +101,7 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
+		// TODO: Cache or otherwise prepare beforehand
 		log.Printf("├proxying to %s[%s]", matched.Name, remoteUrl)
 		proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
 		proxy.Transport = &ProxyTransport{http.DefaultTransport}
