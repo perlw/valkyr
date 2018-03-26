@@ -19,6 +19,7 @@ type Rule struct {
 	Name        string
 	Match       string `ini:"match"`
 	Destination int    `ini:"destination"`
+	Proxy       *httputil.ReverseProxy
 }
 
 type ProxyTransport struct {
@@ -30,13 +31,15 @@ func (t *ProxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	if err != nil {
 		log.Printf("├%s", errors.Wrap(err, "error when talking to service"))
 		resp = &http.Response{
-			Status:           "500 INTERNAL SERVER ERROR",
-			StatusCode:       500,
-			Proto:            r.Proto,
-			ProtoMajor:       r.ProtoMajor,
-			ProtoMinor:       r.ProtoMinor,
-			Header:           http.Header{},
-			Body:             ioutil.NopCloser(bytes.NewBuffer([]byte("cow says moooo"))),
+			Status:     "500 INTERNAL SERVER ERROR",
+			StatusCode: 500,
+			Proto:      r.Proto,
+			ProtoMajor: r.ProtoMajor,
+			ProtoMinor: r.ProtoMinor,
+			Header: http.Header{
+				"Server": []string{"runestone"},
+			},
+			Body:             ioutil.NopCloser(bytes.NewBuffer([]byte("the runestone stares back at you blankly"))),
 			ContentLength:    0,
 			TransferEncoding: r.TransferEncoding,
 			Close:            true,
@@ -101,11 +104,8 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		// TODO: Cache or otherwise prepare beforehand
 		log.Printf("├proxying to %s[%s]", matched.Name, remoteUrl)
-		proxy := httputil.NewSingleHostReverseProxy(remoteUrl)
-		proxy.Transport = &ProxyTransport{http.DefaultTransport}
-		proxy.ServeHTTP(w, r)
+		matched.Proxy.ServeHTTP(w, r)
 		return
 	}
 
@@ -113,12 +113,13 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
+	log.Println("┌starting up")
 	handler := ProxyHandler{
 		Rules: make([]Rule, 0, 10),
 	}
 	cfg, err := ini.Load("runestone.ini")
 	if err != nil {
-		log.Fatalln(errors.Wrap(err, "could not read config"))
+		log.Fatalln(errors.Wrap(err, "├could not read config"))
 	}
 	cfg.BlockMode = false
 
@@ -132,8 +133,16 @@ func main() {
 			Name: name,
 		}
 		if err := section.MapTo(&rule); err != nil {
-			log.Fatal(errors.Wrap(err, "failed to map rule config"))
+			log.Fatal(errors.Wrap(err, "├failed to map rule config"))
 		}
+		remoteUrl, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d/", rule.Destination))
+		if err != nil {
+			log.Println(errors.Wrap(err, "├could not parse target url"))
+			return
+		}
+		rule.Proxy = httputil.NewSingleHostReverseProxy(remoteUrl)
+		rule.Proxy.Transport = &ProxyTransport{http.DefaultTransport}
+
 		handler.Rules = append(handler.Rules, rule)
 	}
 
@@ -141,7 +150,7 @@ func main() {
 	for _, rule := range handler.Rules {
 		names = append(names, rule.Name)
 	}
-	log.Println("registered rules:", strings.Join(names, ", "))
+	log.Println("├registered rules:", strings.Join(names, ", "))
 
 	server := &http.Server{
 		Addr:           ":8000",
@@ -151,9 +160,9 @@ func main() {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	log.Println("going up...")
+	log.Println("└alive")
 	err = server.ListenAndServe()
 	if err != nil {
-		log.Fatal("could not start server,", err)
+		log.Fatal("└could not start server,", err)
 	}
 }
