@@ -167,21 +167,15 @@ func main() {
 		}
 	})()
 	go (func() {
-		cert, err := tls.LoadX509KeyPair("/etc/letsencrypt/live/perlw.se/fullchain.pem", "/etc/letsencrypt/live/perlw.se/privkey.pem")
-		if err != nil {
-			log.Fatal("└cert files couldn't load,", err)
-		}
 		server := &http.Server{
-			Addr:    ":8443",
-			Handler: handler,
-			TLSConfig: &tls.Config{
-				Certificates: []tls.Certificate{cert},
-			},
+			Addr:           ":8443",
+			Handler:        handler,
+			TLSConfig:      &tls.Config{},
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		}
-		err = server.ListenAndServe()
+		err = server.ListenAndServeTLS("/etc/letsencrypt/live/perlw.se/fullchain.pem", "/etc/letsencrypt/live/perlw.se/privkey.pem")
 		if err != nil {
 			log.Fatal("└could not start tls server,", err)
 		}
