@@ -14,6 +14,7 @@ import (
 
 	"github.com/go-ini/ini"
 	"github.com/pkg/errors"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 type Rule struct {
@@ -153,10 +154,15 @@ func main() {
 	}
 	log.Println("├registered rules:", strings.Join(names, ", "))
 
+	m := &autocert.Manager{
+		Cache:      autocert.DirCache("runestone_certs"),
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist("perlw.se", "pondofsolace.se"),
+	}
 	go (func() {
 		server := &http.Server{
 			Addr:           ":8000",
-			Handler:        handler,
+			Handler:        m.HTTPHandler(nil),
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
@@ -168,14 +174,16 @@ func main() {
 	})()
 	go (func() {
 		server := &http.Server{
-			Addr:           ":8443",
-			Handler:        handler,
-			TLSConfig:      &tls.Config{},
+			Addr:    ":8443",
+			Handler: handler,
+			TLSConfig: &tls.Config{
+				GetCertificate: m.GetCertificate,
+			},
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
 		}
-		err = server.ListenAndServeTLS("/etc/letsencrypt/live/perlw.se/fullchain.pem", "/etc/letsencrypt/live/perlw.se/privkey.pem")
+		err = server.ListenAndServeTLS("", "")
 		if err != nil {
 			log.Fatal("└could not start tls server,", err)
 		}
