@@ -165,9 +165,8 @@ func main() {
 	}
 	go (func() {
 		server := &http.Server{
-			Addr: ":8000",
-			//Handler:        m.HTTPHandler(nil),
-			Handler:        handler,
+			Addr:           ":8000",
+			Handler:        m.HTTPHandler(nil),
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
