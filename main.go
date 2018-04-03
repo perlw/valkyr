@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -152,17 +153,41 @@ func main() {
 	}
 	log.Println("├registered rules:", strings.Join(names, ", "))
 
-	server := &http.Server{
-		Addr:           ":8000",
-		Handler:        handler,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
-	}
+	go (func() {
+		server := &http.Server{
+			Addr:           ":8000",
+			Handler:        handler,
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		err = server.ListenAndServe()
+		if err != nil {
+			log.Fatal("└could not start server,", err)
+		}
+	})()
+	go (func() {
+		cert, err := tls.LoadX509KeyPair("/etc/letsencrypt/live/perlw.se/fullchain.pem", "/etc/letsencrypt/live/perlw.se/privkey.pem")
+		if err != nil {
+			log.Fatal("└cert files couldn't load,", err)
+		}
+		server := &http.Server{
+			Addr:    ":8443",
+			Handler: handler,
+			TLSConfig: &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			},
+			ReadTimeout:    10 * time.Second,
+			WriteTimeout:   10 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		err = server.ListenAndServe()
+		if err != nil {
+			log.Fatal("└could not start tls server,", err)
+		}
+	})()
 
 	log.Println("└alive")
-	err = server.ListenAndServe()
-	if err != nil {
-		log.Fatal("└could not start server,", err)
-	}
+	var forever chan int
+	<-forever
 }
