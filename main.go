@@ -68,6 +68,8 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		log.Printf("└done in %.2fms", float64(time.Since(start))/float64(time.Millisecond))
 	}()
 
+	reqHost := strings.Split(r.Host, ":")[0]
+
 	pathParts := []string{"/"}
 	if r.URL.Path != "/" {
 		pathParts = strings.Split(r.URL.Path, "/")
@@ -77,15 +79,17 @@ func (h ProxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	longest := -1
 	var matched Rule
 	for _, rule := range h.Rules {
-		ruleHost := strings.Split(rule.Match, "/")
-		if len(ruleHost) == 0 {
-			ruleHost = []string{"/"}
-		} else {
-			ruleHost[0] = "/"
+		ruleHostPath := strings.Split(rule.Match, "/")
+		ruleHost := ruleHostPath[0]
+		ruleHostPath[0] = "/"
+
+		if ruleHost != reqHost {
+			continue
 		}
-		if len(ruleHost) <= len(pathParts) {
-			for t := range ruleHost {
-				if ruleHost[t] != pathParts[t] {
+
+		if len(ruleHostPath) <= len(pathParts) {
+			for t := range ruleHostPath {
+				if ruleHostPath[t] != pathParts[t] {
 					break
 				} else {
 					if t > longest {
@@ -161,8 +165,9 @@ func main() {
 	}
 	go (func() {
 		server := &http.Server{
-			Addr:           ":8000",
-			Handler:        m.HTTPHandler(nil),
+			Addr: ":8000",
+			//Handler:        m.HTTPHandler(nil),
+			Handler:        handler,
 			ReadTimeout:    10 * time.Second,
 			WriteTimeout:   10 * time.Second,
 			MaxHeaderBytes: 1 << 20,
