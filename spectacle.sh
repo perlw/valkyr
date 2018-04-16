@@ -1,8 +1,8 @@
 #!/bin/sh
 go get -u golang.org/x/vgo &> goget.log
-$GOPATH/bin/vgo build -o bin/runestone &> build.log
+$GOPATH/bin/vgo build -o bin/valkyr &> build.log
 
-pkill runestone
-cp bin/runestone $HOME/services/
+pkill valkyr
+cp bin/valky $HOME/services/
 cd $HOME/services
-nohup ./runestone &> runestone.log &
+nohup ./valkyr &> valkyr.log &

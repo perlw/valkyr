@@ -1,4 +1,4 @@
-module "github.com/perlw/runestone"
+module "github.com/perlw/valkyr"
 
 require (
 	"github.com/go-ini/ini" v1.33.0

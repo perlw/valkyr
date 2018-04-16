@@ -39,9 +39,9 @@ func (t *ProxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 			ProtoMajor: r.ProtoMajor,
 			ProtoMinor: r.ProtoMinor,
 			Header: http.Header{
-				"Server": []string{"runestone"},
+				"Server": []string{"valkyr"},
 			},
-			Body:             ioutil.NopCloser(bytes.NewBuffer([]byte("the runestone stares back at you blankly"))),
+			Body:             ioutil.NopCloser(bytes.NewBuffer([]byte("the valkyr stares back at you blankly before stating; \"back to Hel with you\""))),
 			ContentLength:    0,
 			TransferEncoding: r.TransferEncoding,
 			Close:            true,
@@ -123,7 +123,7 @@ func main() {
 	handler := ProxyHandler{
 		Rules: make([]Rule, 0, 10),
 	}
-	cfg, err := ini.Load("runestone.ini")
+	cfg, err := ini.Load("valkyr.ini")
 	if err != nil {
 		log.Fatalln(errors.Wrap(err, "├could not read config"))
 	}
@@ -159,7 +159,7 @@ func main() {
 	log.Println("├registered rules:", strings.Join(names, ", "))
 
 	m := &autocert.Manager{
-		Cache:      autocert.DirCache("runestone_certs"),
+		Cache:      autocert.DirCache("valkyr"),
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist("perlw.se", "pondofsolace.se"),
 	}
