@@ -11,6 +11,7 @@ rm -rf $APPBASE
 mkdir -p $APPBASE
 
 cp bin/$APP $APPBASE
+cp $APP.ini $APPBASE
 
 cd $APPBASE
 nohup ./$APP &> $APP.log &
