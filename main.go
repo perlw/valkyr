@@ -159,7 +159,7 @@ func main() {
 	log.Println("├registered rules:", strings.Join(names, ", "))
 
 	m := &autocert.Manager{
-		Cache:      autocert.DirCache("valkyr_certs"),
+		Cache:      autocert.DirCache("certs"),
 		Prompt:     autocert.AcceptTOS,
 		HostPolicy: autocert.HostWhitelist("perlw.se", "pondofsolace.se"),
 	}
