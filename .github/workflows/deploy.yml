@@ -24,7 +24,7 @@ jobs:
       with:
         name: artifact
         path: |
-          image.tar.gz
+          $APP_NAME.tar.gz
           ci/deploy.sh
 
   deploy:
