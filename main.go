@@ -174,7 +174,7 @@ func main() {
 	}
 	go (func() {
 		server := &http.Server{
-			Addr:           ":80",
+			Addr:           ":8000",
 			Handler:        m.HTTPHandler(nil),
 			ReadTimeout:    90 * time.Second,
 			WriteTimeout:   90 * time.Second,
@@ -187,7 +187,7 @@ func main() {
 	})()
 	go (func() {
 		server := &http.Server{
-			Addr:    ":443",
+			Addr:    ":8443",
 			Handler: handler,
 			TLSConfig: &tls.Config{
 				GetCertificate: m.GetCertificate,

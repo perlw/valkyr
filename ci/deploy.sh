@@ -8,7 +8,7 @@ if [ "$dockerid" != ""]; then
   docker stop $dockerid
 fi;
 docker run --restart unless-stopped -d \
-	-p 8000:80 -p 8443:443 --net=valkyr \
-	valkyr:latest
+  --net=host --net=valkyr \
+  valkyr:latest
 docker container prune -f
 docker image prune -af
