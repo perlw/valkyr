@@ -42,9 +42,3 @@ jobs:
         SSH_HOST: ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}
       run: |
         ls
-        #echo "${{ secrets.SSH_KEY }}" > ./key
-        #chmod 0600 ./key
-        #scp -o StrictHostKeyChecking=no -i ./key \
-          #$APP_NAME.tar.gz $SSH_HOST:images/
-        #ssh -o StrictHostKeyChecking=no -i ./key $SSH_HOST \
-          #'bash -s' < ci/deploy.sh
