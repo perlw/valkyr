@@ -1,7 +1,7 @@
 name: Build and Deploy
 
 env:
-	APP_NAME: valkyr
+  APP_NAME: valkyr
 
 on:
   push:
@@ -46,5 +46,5 @@ jobs:
         chmod 0600 ./key
         scp -o StrictHostKeyChecking=no -i ./key \
           $APP_NAME.tar.gz $SSH_HOST:images/
-				ssh -o StrictHostKeyChecking=no -i ./key $SSH_HOST \
+        ssh -o StrictHostKeyChecking=no -i ./key $SSH_HOST \
           'bash -s' < ci/deploy.sh
