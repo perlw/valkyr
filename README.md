@@ -1,3 +1,3 @@
 Valkyr
 ===
-My personal magical HTTP gateway.
+My personal magical gateway.
