@@ -18,13 +18,13 @@ jobs:
     - name: Build the Docker image
       run: |
         docker build . --file Dockerfile --tag $APP_NAME:latest
-        docker save $APP_NAME:latest | gzip > $APP_NAME.tar.gz
+        docker save $APP_NAME:latest | gzip > image.tar.gz
     - name: Upload artifact
       uses: actions/upload-artifact@v2
       with:
         name: artifact
         path: |
-          $APP_NAME.tar.gz
+          image.tar.gz
           ci/deploy.sh
 
   deploy:
@@ -41,4 +41,9 @@ jobs:
       env:
         SSH_HOST: ${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}
       run: |
-        ls
+        echo "${{ secrets.SSH_KEY }}" > ./key
+        chmod 0600 ./key
+        scp -o StrictHostKeyChecking=no -i ./key \
+          image.tar.gz $SSH_HOST:images/$APP_NAME.tar.gz
+        ssh -o StrictHostKeyChecking=no -i ./key $SSH_HOST \
+          'bash -s' < ci/deploy.sh
