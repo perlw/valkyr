@@ -228,11 +228,8 @@ func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if longest > -1 {
 		path := "/" + strings.Join(strings.Split(r.URL.Path, "/")[longest+1:], "/")
 		r.URL.Path = path
-		remoteURL, _ := url.Parse(
-			fmt.Sprintf("http://127.0.0.1:%d/", matched.Destination),
-		)
 
-		h.logger.Printf("proxying to %s[%s]", matched.Name, remoteURL)
+		h.logger.Printf("proxying to %s:%s", matched.Name, path)
 		matched.Proxy.ServeHTTP(w, r)
 		return
 	}
