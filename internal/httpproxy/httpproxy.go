@@ -42,6 +42,7 @@ type Proxy struct {
 	allowedHosts []string
 	handler      proxyHandler
 	ruleMutex    sync.RWMutex
+	certMan      *autocert.Manager
 }
 
 // NewProxy sets up everything needed to get a running proxy.
@@ -57,8 +58,19 @@ func NewProxy(opts ...ProxyOption) *Proxy {
 
 	p.handler.logger = p.logger
 	p.handler.ruleMutex = &p.ruleMutex
+	p.certMan = &autocert.Manager{
+		Cache:      autocert.DirCache("certs"),
+		Prompt:     autocert.AcceptTOS,
+		HostPolicy: autocert.HostWhitelist(p.allowedHosts...),
+	}
 
 	return &p
+}
+
+// SetAllowedHosts sets the allowed hosts.
+func (p *Proxy) SetAllowedHosts(hosts []string) {
+	p.allowedHosts = hosts
+	p.certMan.HostPolicy = autocert.HostWhitelist(p.allowedHosts...)
 }
 
 // AddRule adds a new rule to the proxy engine.
@@ -87,13 +99,15 @@ func (p *Proxy) AddRule(name string, match string, destinationPort int) error {
 	return nil
 }
 
+// ClearRules clears all rules from the proxy.
+func (p *Proxy) ClearRules() {
+	p.ruleMutex.Lock()
+	defer p.ruleMutex.Unlock()
+	p.handler.Rules = []rule{}
+}
+
 // ListenAndServe starts the proxy.
 func (p *Proxy) ListenAndServe() {
-	m := &autocert.Manager{
-		Cache:      autocert.DirCache("certs"),
-		Prompt:     autocert.AcceptTOS,
-		HostPolicy: autocert.HostWhitelist(p.allowedHosts...),
-	}
 	serverFailed := make(chan interface{})
 	tlsServerFailed := make(chan interface{})
 	go (func() {
@@ -101,7 +115,7 @@ func (p *Proxy) ListenAndServe() {
 
 		server := &http.Server{
 			Addr:           ":8000",
-			Handler:        m.HTTPHandler(nil),
+			Handler:        p.certMan.HTTPHandler(nil),
 			ReadTimeout:    90 * time.Second,
 			WriteTimeout:   90 * time.Second,
 			MaxHeaderBytes: 1 << 20,
@@ -118,7 +132,7 @@ func (p *Proxy) ListenAndServe() {
 			Addr:    ":8443",
 			Handler: p.handler,
 			TLSConfig: &tls.Config{
-				GetCertificate: m.GetCertificate,
+				GetCertificate: p.certMan.GetCertificate,
 			},
 			ReadTimeout:    90 * time.Second,
 			WriteTimeout:   90 * time.Second,
