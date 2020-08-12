@@ -36,20 +36,40 @@ func WithAllowedHosts(hosts []string) ProxyOption {
 	}
 }
 
+// WithErrorServerHeader is the Server Header to use when the communication
+// between the proxy and the matched service fails in some way.
+func WithErrorServerHeader(serverHeader []string) ProxyOption {
+	return func(p *Proxy) {
+		p.errorServerHeader = serverHeader
+	}
+}
+
+// WithErrorBody is the response body to use when the communication between the
+// proxy and the matched service fails in some way.
+func WithErrorBody(body []byte) ProxyOption {
+	return func(p *Proxy) {
+		p.errorBody = body
+	}
+}
+
 // Proxy is the main proxy struct.
 type Proxy struct {
-	logger       *log.Logger
-	allowedHosts []string
-	handler      proxyHandler
-	ruleMutex    sync.RWMutex
-	certMan      *autocert.Manager
+	logger            *log.Logger
+	allowedHosts      []string
+	handler           proxyHandler
+	ruleMutex         sync.RWMutex
+	certMan           *autocert.Manager
+	errorServerHeader []string
+	errorBody         []byte
 }
 
 // NewProxy sets up everything needed to get a running proxy.
 func NewProxy(opts ...ProxyOption) *Proxy {
 	p := Proxy{
-		logger:       nil,
-		allowedHosts: []string{},
+		logger:            nil,
+		allowedHosts:      []string{},
+		errorServerHeader: []string{"httpproxy"},
+		errorBody:         []byte("error communicating with matched service"),
 	}
 
 	for _, opt := range opts {
@@ -86,7 +106,9 @@ func (p *Proxy) AddRule(name string, match string, destinationPort int) error {
 	}
 	reverseProxy := httputil.NewSingleHostReverseProxy(remoteURL)
 	reverseProxy.Transport = &proxyTransport{
-		logger: p.logger,
+		logger:            p.logger,
+		errorServerHeader: p.errorServerHeader,
+		errorBody:         p.errorBody,
 	}
 	reverseProxy.Transport = http.DefaultTransport
 	p.handler.Rules = append(p.handler.Rules, rule{
@@ -162,13 +184,15 @@ type rule struct {
 
 type proxyTransport struct {
 	http.RoundTripper
-	logger *log.Logger
+	logger            *log.Logger
+	errorServerHeader []string
+	errorBody         []byte
 }
 
 func (t *proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 	resp, err := t.RoundTripper.RoundTrip(r)
 	if err != nil {
-		t.logger.Println(fmt.Errorf("error when talking to service: %w", err).Error())
+		t.logger.Printf("error when talking to service: %s", err.Error())
 		resp = &http.Response{
 			Status:     "500 INTERNAL SERVER ERROR",
 			StatusCode: 500,
@@ -176,13 +200,9 @@ func (t *proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 			ProtoMajor: r.ProtoMajor,
 			ProtoMinor: r.ProtoMinor,
 			Header: http.Header{
-				"Server": []string{"valkyr"},
+				"Server": t.errorServerHeader,
 			},
-			Body: ioutil.NopCloser(
-				bytes.NewBuffer(
-					[]byte("the valkyr stares back at you blankly before stating; \"back to Hel with you\""),
-				),
-			),
+			Body:             ioutil.NopCloser(bytes.NewBuffer(t.errorBody)),
 			ContentLength:    0,
 			TransferEncoding: r.TransferEncoding,
 			Close:            true,

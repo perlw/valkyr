@@ -69,6 +69,13 @@ func main() {
 	proxy := httpproxy.NewProxy(
 		httpproxy.WithLogger(logger),
 		httpproxy.WithAllowedHosts(config.AllowedHosts),
+		httpproxy.WithErrorServerHeader([]string{"valkyr"}),
+		httpproxy.WithErrorBody(
+			[]byte(
+				`the valkyr stares back at you blankly before stating;&nbsp;
+				"back to Hel with you"`,
+			),
+		),
 	)
 	for _, rule := range config.Rules {
 		proxy.AddRule(rule.Name, rule.Match, rule.Destination)
