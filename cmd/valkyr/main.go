@@ -15,10 +15,12 @@ import (
 
 func main() {
 	var configFile string
+	var local bool
 	flag.StringVar(
 		&configFile, "config-file", "/etc/valkyr.json",
 		"sets the path to the config file",
 	)
+	flag.BoolVar(&local, "local", false, "runs valkyr locally for development")
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "valkyr: ", log.LstdFlags)
@@ -66,7 +68,7 @@ func main() {
 		}
 	}
 
-	proxy := httpproxy.NewProxy(
+	proxyOptions := []httpproxy.ProxyOption{
 		httpproxy.WithLogger(logger),
 		httpproxy.WithAllowedHosts(config.AllowedHosts),
 		httpproxy.WithErrorServerHeader([]string{"valkyr"}),
@@ -76,7 +78,11 @@ func main() {
 				"back to Hel with you"`,
 			),
 		),
-	)
+	}
+	if !local {
+		proxyOptions = append(proxyOptions, httpproxy.WithHTTPSRedirect())
+	}
+	proxy := httpproxy.NewProxy(proxyOptions...)
 	for _, rule := range config.Rules {
 		proxy.AddRule(rule.Name, rule.Match, rule.Destination)
 	}

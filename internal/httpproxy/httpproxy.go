@@ -52,6 +52,13 @@ func WithErrorBody(body []byte) ProxyOption {
 	}
 }
 
+// WithWithHTTPSRedirect redirects insecure HTTP calls to HTTPS.
+func WithHTTPSRedirect() ProxyOption {
+	return func(p *Proxy) {
+		p.httpsRedirect = true
+	}
+}
+
 // Proxy is the main proxy struct.
 type Proxy struct {
 	logger            *log.Logger
@@ -61,6 +68,7 @@ type Proxy struct {
 	certMan           *autocert.Manager
 	errorServerHeader []string
 	errorBody         []byte
+	httpsRedirect     bool
 }
 
 // NewProxy sets up everything needed to get a running proxy.
@@ -135,9 +143,15 @@ func (p *Proxy) ListenAndServe() {
 	go (func() {
 		defer close(serverFailed)
 
+		var handler http.Handler
+		if p.httpsRedirect {
+			handler = p.certMan.HTTPHandler(nil)
+		} else {
+			handler = p.handler
+		}
 		server := &http.Server{
 			Addr:           ":8000",
-			Handler:        p.certMan.HTTPHandler(nil),
+			Handler:        handler,
 			ReadTimeout:    90 * time.Second,
 			WriteTimeout:   90 * time.Second,
 			MaxHeaderBytes: 1 << 20,
@@ -260,7 +274,15 @@ func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if longest > -1 {
-		path := "/" + strings.Join(strings.Split(r.URL.Path, "/")[longest+1:], "/")
+		parts := strings.Split(r.URL.Path, "/")
+		if len(parts) == longest+1 {
+			h.logger.Printf(
+				"redirecting to %s:%s, missing root", matched.Name, r.URL.String()+"/",
+			)
+			http.Redirect(w, r, r.URL.String()+"/", http.StatusMovedPermanently)
+			return
+		}
+		path := "/" + strings.Join(parts[longest+1:], "/")
 		r.URL.Path = path
 
 		h.logger.Printf("proxying to %s:%s", matched.Name, path)
