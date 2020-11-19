@@ -8,10 +8,28 @@ import (
 	"os"
 	"strings"
 
-	"github.com/fsnotify/fsnotify"
-
 	"github.com/perlw/valkyr/internal/httpproxy"
 )
+
+func loadConfig(configFile string, config interface{}) error {
+	_, err := os.Stat(configFile)
+	if os.IsNotExist(err) {
+		return err
+	}
+
+	file, err := os.Open(configFile)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	err = json.NewDecoder(file).Decode(config)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func main() {
 	var configFile string
@@ -24,13 +42,6 @@ func main() {
 	flag.Parse()
 
 	logger := log.New(os.Stdout, "valkyr: ", log.LstdFlags)
-
-	watcher, err := fsnotify.NewWatcher()
-	if err != nil {
-		logger.Fatal(fmt.Errorf("could not set up fsnotify: %w", err).Error())
-	}
-	defer watcher.Close()
-
 	var config struct {
 		AllowedHosts []string `json:"allowed_hosts"`
 		Rules        []struct {
@@ -39,33 +50,9 @@ func main() {
 			Destination int    `json:"destination_port"`
 		} `json:"rules"`
 	}
-	loadConfig := func() error {
-		file, err := os.Open(configFile)
-		if err != nil {
-			return fmt.Errorf("could not read config file: %w", err)
-		}
-		defer file.Close()
-
-		err = json.NewDecoder(file).Decode(&config)
-		if err != nil {
-			return fmt.Errorf("could not decode config file: %w", err)
-		}
-
-		return nil
-	}
-
-	_, err = os.Stat(configFile)
-	if os.IsNotExist(err) {
-		logger.Printf("warning, no config file present")
-	} else {
-		err := loadConfig()
-		if err != nil {
-			logger.Fatal(fmt.Errorf("could not load config: %w", err).Error())
-		}
-		err = watcher.Add(configFile)
-		if err != nil {
-			logger.Fatal(fmt.Errorf("could watch file: %w", err).Error())
-		}
+	if err := loadConfig(configFile, &config); err != nil {
+		logger.Printf(fmt.Errorf("could not load config: %w", err).Error())
+		os.Exit(1)
 	}
 
 	proxyOptions := []httpproxy.ProxyOption{
@@ -86,39 +73,6 @@ func main() {
 	for _, rule := range config.Rules {
 		proxy.AddRule(rule.Name, rule.Match, rule.Destination)
 	}
-
-	go func() {
-		for {
-			select {
-			case event, ok := <-watcher.Events:
-				if !ok {
-					return
-				}
-				if event.Op&fsnotify.Write == fsnotify.Write {
-					logger.Println("config file modified, reloading", event.Name)
-					err := loadConfig()
-					if err != nil {
-						logger.Println(fmt.Errorf("could not reload config: %w", err).Error())
-					}
-					proxy.SetAllowedHosts(config.AllowedHosts)
-					proxy.ClearRules()
-					for _, rule := range config.Rules {
-						proxy.AddRule(rule.Name, rule.Match, rule.Destination)
-					}
-					names := []string{}
-					for _, rule := range config.Rules {
-						names = append(names, rule.Name)
-					}
-					log.Printf("allowed hosts: %s", strings.Join(config.AllowedHosts, ", "))
-					log.Printf("registered rules: %s", strings.Join(names, ", "))
-				}
-			case _, ok := <-watcher.Errors:
-				if !ok {
-					return
-				}
-			}
-		}
-	}()
 
 	logger.Printf("up and running")
 	names := []string{}

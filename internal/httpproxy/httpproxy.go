@@ -52,7 +52,7 @@ func WithErrorBody(body []byte) ProxyOption {
 	}
 }
 
-// WithWithHTTPSRedirect redirects insecure HTTP calls to HTTPS.
+// WithHTTPSRedirect redirects insecure HTTP calls to HTTPS.
 func WithHTTPSRedirect() ProxyOption {
 	return func(p *Proxy) {
 		p.httpsRedirect = true
@@ -72,6 +72,7 @@ type Proxy struct {
 }
 
 // NewProxy sets up everything needed to get a running proxy.
+// TODO: Make Proxy less chatty?
 func NewProxy(opts ...ProxyOption) *Proxy {
 	p := Proxy{
 		logger:            nil,
@@ -236,6 +237,7 @@ type proxyHandler struct {
 	Rules     []rule
 }
 
+// TODO: Cleanup matching logic.
 func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ruleMutex.RLock()
 	defer h.ruleMutex.RUnlock()
