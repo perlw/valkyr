@@ -69,6 +69,12 @@ type Proxy struct {
 	errorServerHeader []string
 	errorBody         []byte
 	httpsRedirect     bool
+
+	// Metrics
+	VisitsPerServiceAndPath map[string]map[string]int
+	StatusPerServiceAndPath map[string]map[string]map[int]int
+	TotalVisits             int
+	TotalErrors             int
 }
 
 // NewProxy sets up everything needed to get a running proxy.
@@ -79,6 +85,9 @@ func NewProxy(opts ...ProxyOption) *Proxy {
 		allowedHosts:      []string{},
 		errorServerHeader: []string{"httpproxy"},
 		errorBody:         []byte("error communicating with matched service"),
+
+		VisitsPerServiceAndPath: make(map[string]map[string]int),
+		StatusPerServiceAndPath: make(map[string]map[string]map[int]int),
 	}
 
 	for _, opt := range opts {
@@ -87,6 +96,7 @@ func NewProxy(opts ...ProxyOption) *Proxy {
 
 	p.handler.logger = p.logger
 	p.handler.ruleMutex = &p.ruleMutex
+	p.handler.proxy = &p
 	p.certMan = &autocert.Manager{
 		Cache:      autocert.DirCache("certs"),
 		Prompt:     autocert.AcceptTOS,
@@ -94,6 +104,29 @@ func NewProxy(opts ...ProxyOption) *Proxy {
 	}
 
 	return &p
+}
+
+// TODO: Look into lru, this will currently fill memory extremely easily.
+func (p *Proxy) incVisitMetric(service, path string) {
+	if _, ok := p.VisitsPerServiceAndPath[service]; !ok {
+		p.VisitsPerServiceAndPath[service] = make(map[string]int)
+	}
+	p.VisitsPerServiceAndPath[service][path]++
+	p.TotalVisits++
+}
+
+// TODO: Look into lru, this will currently fill memory extremely easily.
+func (p *Proxy) incStatusMetric(service, path string, status int) {
+	if _, ok := p.StatusPerServiceAndPath[service]; !ok {
+		p.StatusPerServiceAndPath[service] = make(map[string]map[int]int)
+	}
+	if _, ok := p.StatusPerServiceAndPath[service][path]; !ok {
+		p.StatusPerServiceAndPath[service][path] = make(map[int]int)
+	}
+	p.StatusPerServiceAndPath[service][path][status]++
+	if status >= 400 {
+		p.TotalErrors++
+	}
 }
 
 // SetAllowedHosts sets the allowed hosts.
@@ -116,6 +149,7 @@ func (p *Proxy) AddRule(name string, match string, destinationPort int) error {
 	reverseProxy := httputil.NewSingleHostReverseProxy(remoteURL)
 	reverseProxy.Transport = &proxyTransport{
 		logger:            p.logger,
+		proxy:             p,
 		errorServerHeader: p.errorServerHeader,
 		errorBody:         p.errorBody,
 	}
@@ -200,6 +234,7 @@ type rule struct {
 type proxyTransport struct {
 	http.RoundTripper
 	logger            *log.Logger
+	proxy             *Proxy
 	errorServerHeader []string
 	errorBody         []byte
 }
@@ -228,12 +263,15 @@ func (t *proxyTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		}
 	}
 
+	t.proxy.incStatusMetric("valkyr", r.URL.String(), resp.StatusCode)
+
 	return resp, nil
 }
 
 type proxyHandler struct {
 	logger    *log.Logger
 	ruleMutex *sync.RWMutex
+	proxy     *Proxy
 	Rules     []rule
 }
 
@@ -241,6 +279,30 @@ type proxyHandler struct {
 func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ruleMutex.RLock()
 	defer h.ruleMutex.RUnlock()
+
+	if r.URL.String() == "/metrics" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("services:\n"))
+		services := make([]string, 0, 10)
+		services = append(services, "valkyr")
+		for _, r := range h.Rules {
+			services = append(services, r.Name)
+		}
+		for _, service := range services {
+			w.Write([]byte(fmt.Sprintf("\t%s\n", service)))
+			for path, count := range h.proxy.VisitsPerServiceAndPath[service] {
+				w.Write([]byte(fmt.Sprintf("\t\t%s: %d\n", path, count)))
+				for statusCode, statusCount := range h.proxy.StatusPerServiceAndPath[service][path] {
+					w.Write([]byte(fmt.Sprintf("\t\t\t%d: %d\n", statusCode, statusCount)))
+				}
+			}
+		}
+		w.Write([]byte("---\n"))
+		w.Write([]byte(fmt.Sprintf("total_visits: %d\n", h.proxy.TotalVisits)))
+		w.Write([]byte(fmt.Sprintf("total_errors: %d\n", h.proxy.TotalErrors)))
+
+		return
+	}
 
 	reqHost := strings.Split(r.Host, ":")[0]
 
@@ -281,16 +343,20 @@ func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			h.logger.Printf(
 				"redirecting to %s:%s, missing root", matched.Name, r.URL.String()+"/",
 			)
+			h.proxy.incStatusMetric(matched.Name, r.URL.String(), http.StatusMovedPermanently)
 			http.Redirect(w, r, r.URL.String()+"/", http.StatusMovedPermanently)
 			return
 		}
 		path := "/" + strings.Join(parts[longest+1:], "/")
 		r.URL.Path = path
 
+		h.proxy.incVisitMetric(matched.Name, r.URL.String())
 		h.logger.Printf("proxying to %s:%s", matched.Name, path)
 		matched.Proxy.ServeHTTP(w, r)
 		return
 	}
 
+	h.proxy.incVisitMetric("valkyr", r.URL.String())
+	h.proxy.incStatusMetric("valkyr", r.URL.String(), http.StatusNotFound)
 	http.Error(w, "404 NOT FOUND", http.StatusNotFound)
 }
