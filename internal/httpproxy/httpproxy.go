@@ -215,6 +215,23 @@ func (p *Proxy) ListenAndServe() {
 		}
 	})()
 
+	go (func() {
+		server := &http.Server{
+			Addr: ":9090",
+			Handler: metricsHandler{
+				proxy: p,
+				rules: p.handler.Rules,
+			},
+			ReadTimeout:    90 * time.Second,
+			WriteTimeout:   90 * time.Second,
+			MaxHeaderBytes: 1 << 20,
+		}
+		err := server.ListenAndServe()
+		if err != nil {
+			p.logger.Fatal("could not serve metrics,", err)
+		}
+	})()
+
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt, syscall.SIGTERM)
 	select {
@@ -280,30 +297,6 @@ func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ruleMutex.RLock()
 	defer h.ruleMutex.RUnlock()
 
-	if r.URL.String() == "/metrics" {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("services:\n"))
-		services := make([]string, 0, 10)
-		services = append(services, "valkyr")
-		for _, r := range h.Rules {
-			services = append(services, r.Name)
-		}
-		for _, service := range services {
-			w.Write([]byte(fmt.Sprintf("\t%s\n", service)))
-			for path, count := range h.proxy.VisitsPerServiceAndPath[service] {
-				w.Write([]byte(fmt.Sprintf("\t\t%s: %d\n", path, count)))
-				for statusCode, statusCount := range h.proxy.StatusPerServiceAndPath[service][path] {
-					w.Write([]byte(fmt.Sprintf("\t\t\t%d: %d\n", statusCode, statusCount)))
-				}
-			}
-		}
-		w.Write([]byte("---\n"))
-		w.Write([]byte(fmt.Sprintf("total_visits: %d\n", h.proxy.TotalVisits)))
-		w.Write([]byte(fmt.Sprintf("total_errors: %d\n", h.proxy.TotalErrors)))
-
-		return
-	}
-
 	reqHost := strings.Split(r.Host, ":")[0]
 
 	pathParts := []string{"/"}
@@ -359,4 +352,33 @@ func (h proxyHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.proxy.incVisitMetric("valkyr", r.URL.String())
 	h.proxy.incStatusMetric("valkyr", r.URL.String(), http.StatusNotFound)
 	http.Error(w, "404 NOT FOUND", http.StatusNotFound)
+}
+
+type metricsHandler struct {
+	proxy *Proxy
+	rules []rule
+}
+
+func (h metricsHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.String() == "/metrics" {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("services:\n"))
+		services := make([]string, 0, 10)
+		services = append(services, "valkyr")
+		for _, r := range h.rules {
+			services = append(services, r.Name)
+		}
+		for _, service := range services {
+			w.Write([]byte(fmt.Sprintf("\t%s\n", service)))
+			for path, count := range h.proxy.VisitsPerServiceAndPath[service] {
+				w.Write([]byte(fmt.Sprintf("\t\t%s: %d\n", path, count)))
+				for statusCode, statusCount := range h.proxy.StatusPerServiceAndPath[service][path] {
+					w.Write([]byte(fmt.Sprintf("\t\t\t%d: %d\n", statusCode, statusCount)))
+				}
+			}
+		}
+		w.Write([]byte("---\n"))
+		w.Write([]byte(fmt.Sprintf("total_visits: %d\n", h.proxy.TotalVisits)))
+		w.Write([]byte(fmt.Sprintf("total_errors: %d\n", h.proxy.TotalErrors)))
+	}
 }
