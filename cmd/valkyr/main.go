@@ -41,6 +41,14 @@ func main() {
 	flag.BoolVar(&local, "local", false, "runs valkyr locally for development")
 	flag.Parse()
 
+	var buildDate string
+	for _, env := range os.Environ() {
+		parts := strings.Split(env, "=")
+		if parts[0] == "BUILD_DATE" {
+			buildDate = parts[1]
+		}
+	}
+
 	logger := log.New(os.Stdout, "valkyr: ", log.LstdFlags)
 	var config struct {
 		AllowedHosts []string `json:"allowed_hosts"`
@@ -74,6 +82,7 @@ func main() {
 		proxy.AddRule(rule.Name, rule.Match, rule.Destination)
 	}
 
+	logger.Printf("valkyr - build date: %s\n", buildDate)
 	logger.Printf("up and running")
 	names := []string{}
 	for _, rule := range config.Rules {

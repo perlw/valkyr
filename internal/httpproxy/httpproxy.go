@@ -106,7 +106,7 @@ func NewProxy(opts ...ProxyOption) *Proxy {
 	return &p
 }
 
-// TODO: Look into lru, this will currently fill memory extremely easily.
+// TODO: Store metrics on disk
 func (p *Proxy) incVisitMetric(service, path string) {
 	if _, ok := p.VisitsPerServiceAndPath[service]; !ok {
 		p.VisitsPerServiceAndPath[service] = make(map[string]int)
@@ -115,7 +115,7 @@ func (p *Proxy) incVisitMetric(service, path string) {
 	p.TotalVisits++
 }
 
-// TODO: Look into lru, this will currently fill memory extremely easily.
+// TODO: Store metrics on disk
 func (p *Proxy) incStatusMetric(service, path string, status int) {
 	if _, ok := p.StatusPerServiceAndPath[service]; !ok {
 		p.StatusPerServiceAndPath[service] = make(map[string]map[int]int)
